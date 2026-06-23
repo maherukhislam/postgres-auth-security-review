@@ -2,14 +2,14 @@
 
 > An [Agent Skill](https://agentskills.io) that reviews and writes
 > PostgreSQL/Supabase authentication code against a researched set of
-> common and uncommon security mistakes — before it ships.
+> common and uncommon security mistakes - before it ships.
 
 [![Agent Skills](https://img.shields.io/badge/agent--skills-1.0.0-blue)](https://agentskills.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Validate skill](https://github.com/maherukhislam/postgres-auth-security-review/actions/workflows/validate.yml/badge.svg)](https://github.com/maherukhislam/postgres-auth-security-review/actions/workflows/validate.yml)
 
 Works in **Codex CLI**, **Antigravity**, **Claude Code**, **Cursor**,
-**Gemini CLI**, and **GitHub Copilot** — any agent that supports the open
+**Gemini CLI**, and **GitHub Copilot** - any agent that supports the open
 [agentskills.io](https://agentskills.io) standard.
 
 ---
@@ -20,7 +20,7 @@ The skill activates automatically when a task touches login, signup,
 password-reset, JWT/session handling, SQL queries, migrations, Row-Level
 Security (RLS) policies, Postgres roles/grants, or Supabase client-key usage.
 It then applies a set of non-negotiable rules and flags anything that would
-ship with a known security hole — inline fix where it can, explicit warning
+ship with a known security hole - inline fix where it can, explicit warning
 where it can't.
 
 **Covers:**
@@ -94,7 +94,7 @@ share `.agents/skills/`. Claude Code uses `.claude/skills/` instead.
 
 ## Run the scanner manually
 
-The scan script is plain `grep` — no network calls, no code execution, safe
+The scan script is plain `grep` - no network calls, no code execution, safe
 to run any time:
 
 ```bash
@@ -117,7 +117,7 @@ It exits non-zero if it finds anything, so you can also use it as a CI step:
 ```
 skills/
 └── postgres-auth-security-review/
-    ├── SKILL.md                   # Core rules — what the agent reads when triggered
+    ├── SKILL.md                   # Core rules - what the agent reads when triggered
     ├── references/
     │   └── checklist.md           # Deep reasoning, CVE case study, exact parameters
     └── scripts/
@@ -140,8 +140,8 @@ Or `git pull` + re-copy if you installed manually.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). All PRs run the validation CI
 automatically. New patterns need a source (CVE, OWASP, NIST, or a documented
-incident) — no speculation.
+incident) - no speculation.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).

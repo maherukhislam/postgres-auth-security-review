@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# scan_auth_security.sh — static grep scan for auth/Postgres/Supabase security
+# scan_auth_security.sh - static grep scan for auth/Postgres/Supabase security
 # red flags. Read-only: no network calls, no edits, no execution of repo code.
-# Heuristic only — confirm every hit by hand.
+# Heuristic only - confirm every hit by hand.
 #
 # Usage:  scan_auth_security.sh [path]      (defaults to current directory)
 # Exit:   0 = no matches; 1 = one or more pattern groups matched
@@ -33,7 +33,7 @@ check() {
 
 echo "=== postgres-auth-security-review scanner v1.2.0 ==="
 echo "Scanning: $ROOT"
-echo "(Heuristic — every hit needs human review. Not a guarantee of a bug.)"
+echo "(Heuristic - every hit needs human review. Not a guarantee of a bug.)"
 
 # ── A. PostgreSQL version ─────────────────────────────────────────────────────
 check \
@@ -44,12 +44,12 @@ check \
 
 # ── B. RLS ────────────────────────────────────────────────────────────────────
 check \
-  "B1. USING (true) — permissive RLS policy (no restriction)" \
+  "B1. USING (true) - permissive RLS policy (no restriction)" \
   'USING[[:space:]]*\([[:space:]]*(true|TRUE)[[:space:]]*\)' \
   --include="*.sql"
 
 check \
-  "B2. WITH CHECK (true) — permissive RLS write policy" \
+  "B2. WITH CHECK (true) - permissive RLS write policy" \
   'WITH[[:space:]]+CHECK[[:space:]]*\([[:space:]]*(true|TRUE)[[:space:]]*\)' \
   --include="*.sql"
 
@@ -62,7 +62,7 @@ while IFS= read -r f; do
 done < <(grep -rlE "${EXCLUDES[@]}" 'CREATE[[:space:]]+TABLE' --include="*.sql" "$ROOT" 2>/dev/null || true)
 
 check \
-  "B4. MATERIALIZED VIEW — confirm it does not expose user-specific rows (RLS does not apply at query time)" \
+  "B4. MATERIALIZED VIEW - confirm it does not expose user-specific rows (RLS does not apply at query time)" \
   'CREATE[[:space:]]+(OR[[:space:]]+REPLACE[[:space:]]+)?MATERIALIZED[[:space:]]+VIEW' \
   --include="*.sql"
 
@@ -111,14 +111,14 @@ check \
 # ── F. Custom JWT (crypto.subtle / HMAC) ──────────────────────────────────────
 # F1: crypto.subtle used without alg:none rejection nearby
 check \
-  "F1. crypto.subtle JWT usage — confirm alg:none is explicitly rejected before verify()" \
+  "F1. crypto.subtle JWT usage - confirm alg:none is explicitly rejected before verify()" \
   'crypto\.subtle\.(sign|verify|importKey)' \
   --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
   --include="*.mjs"
 
 # F2: token claims read before verify() call (authentication bypass pattern)
 check \
-  "F2. JWT payload parsed/destructured before crypto.subtle.verify() — claims must not be trusted before signature check" \
+  "F2. JWT payload parsed/destructured before crypto.subtle.verify() - claims must not be trusted before signature check" \
   'JSON\.parse\(atob|JSON\.parse\(Buffer\.from.*base64' \
   --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
   --include="*.mjs"
@@ -130,9 +130,9 @@ check \
   --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
   --include="*.mjs"
 
-# F4: Long JWT expiry (> 24h) — risky for stolen-token scenarios
+# F4: Long JWT expiry (> 24h) - risky for stolen-token scenarios
 check \
-  "F4. JWT expiry > 24h — stolen tokens cannot be invalidated without rotating the signing secret" \
+  "F4. JWT expiry > 24h - stolen tokens cannot be invalidated without rotating the signing secret" \
   'expiresIn\s*[:=]\s*['"'"'"]?(([2-9]|[1-9][0-9]+)d|[7-9]h|[1-9][0-9]+h|168h|604800|[1-9][0-9]{5,})' \
   --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
   --include="*.mjs" --include="*.json"
@@ -145,7 +145,7 @@ if [[ -n "$_g1" ]]; then
 fi
 
 check \
-  "G2. alg:none accepted — JWT signature requirement disabled" \
+  "G2. alg:none accepted - JWT signature requirement disabled" \
   '"alg"\s*:\s*"[Nn][Oo][Nn][Ee]"' \
   --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
   --include="*.json" --include="*.py"
@@ -158,13 +158,13 @@ check \
 # ── H. Serverless / edge routing ─────────────────────────────────────────────
 # H1: catch-all route file without an obvious auth guard at the top
 check \
-  "H1. Catch-all edge/serverless route — confirm top-level auth guard wraps all handlers (not per-handler)" \
+  "H1. Catch-all edge/serverless route - confirm top-level auth guard wraps all handlers (not per-handler)" \
   '\[\[path\]\]|\[\.\.\.slug\]|catchall|catch_all' \
   --include="*.js" --include="*.ts" --include="*.mjs"
 
 # H2: module-scope mutable variable (can leak between warm requests)
 check \
-  "H2. Module-scope mutable variable in edge function — may leak between concurrent requests" \
+  "H2. Module-scope mutable variable in edge function - may leak between concurrent requests" \
   '^(let|var)\s+[a-zA-Z_][a-zA-Z0-9_]*\s*[=;]' \
   --include="*.js" --include="*.ts" --include="*.mjs"
 
@@ -176,14 +176,14 @@ check \
   --include="*.yml" --include="*.yaml" --include="*.json" --include="*.conf"
 
 check \
-  "H4. Next.js middleware.ts exists — verify auth also enforced in API routes" \
+  "H4. Next.js middleware.ts exists - verify auth also enforced in API routes" \
   '(export function middleware|export default.*middleware)' \
   --include="*.ts" --include="*.js"
 
 # ── I. Object storage (R2 / S3 / GCS) ───────────────────────────────────────
 # I1: pre-signed URL without expiry parameter
 check \
-  "I1. Pre-signed URL generated without expiry — add expiresIn / Expires parameter" \
+  "I1. Pre-signed URL generated without expiry - add expiresIn / Expires parameter" \
   '(getSignedUrl|createPresignedUrl|generatePresignedUrl|presign)\s*\([^)]{0,300}\)' \
   --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
   --include="*.py" --include="*.go" \
@@ -197,14 +197,14 @@ fi
 
 # I2: object key constructed from user ID (IDOR at storage layer)
 check \
-  "I2. Object key/path built from user_id or numeric ID — use random UUIDs instead to prevent IDOR" \
+  "I2. Object key/path built from user_id or numeric ID - use random UUIDs instead to prevent IDOR" \
   '(key|path|object_key|objectKey)\s*[=:]\s*[`'"'"'"][^`'"'"'"]*\$\{.*(user_id|userId|uid|id)[^}]*\}' \
   --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
   --include="*.mjs"
 
 # I3: public bucket config
 check \
-  "I3. Public bucket access policy — documents bucket must be private" \
+  "I3. Public bucket access policy - documents bucket must be private" \
   '(public[_-]?read|PublicRead|public-read|AllPublicAccess|\"public\")' \
   --include="*.json" --include="*.tf" --include="*.yml" --include="*.yaml" \
   --include="*.ts" --include="*.js"
@@ -235,15 +235,15 @@ if [[ -n "$_k" ]]; then
 fi
 
 # ── L. Custom RLS session binding ────────────────────────────────────────────
-# L1: set_config without is_local=true (session-scoped — leaks between pooled requests)
+# L1: set_config without is_local=true (session-scoped - leaks between pooled requests)
 check \
-  "L1. set_config without is_local=true — session-scoped variable leaks across pooled connections" \
+  "L1. set_config without is_local=true - session-scoped variable leaks across pooled connections" \
   "set_config\s*\([^)]*,\s*(false|0)\s*\)" \
   --include="*.sql"
 
 # L2: is_admin / similar check that might fail-open (EXCEPTION WHEN OTHERS THEN RETURN true)
 check \
-  "L2. Exception handler returning true/admin in auth function — fails open if error occurs" \
+  "L2. Exception handler returning true/admin in auth function - fails open if error occurs" \
   'EXCEPTION\s+WHEN\s+OTHERS\s+THEN\s+(RETURN\s+true|RETURN\s+1)' \
   --include="*.sql"
 
@@ -263,7 +263,7 @@ fi
 
 # ── M. Rate limiting ──────────────────────────────────────────────────────────
 check \
-  "M1. Rate-limit IP from X-Forwarded-For — use CF-Connecting-IP or X-Real-IP (platform-verified)" \
+  "M1. Rate-limit IP from X-Forwarded-For - use CF-Connecting-IP or X-Real-IP (platform-verified)" \
   'X-Forwarded-For.*(rate.limit|rate_limit|ip.address|ip_address)|(rate.limit|rate_limit).*X-Forwarded-For' \
   --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
   --include="*.mjs" --include="*.py"
@@ -290,20 +290,20 @@ fi
 # ── O. Minor / guardian consent ───────────────────────────────────────────────
 # O1: age check only in client-side component files
 check \
-  "O1. Age/minor check in client component — must also exist server-side (easy to bypass on client)" \
+  "O1. Age/minor check in client component - must also exist server-side (easy to bypass on client)" \
   '(getAgeYears|calculateAge|isMinor|age\s*<\s*18|dob|date_of_birth)' \
   --include="*.tsx" --include="*.jsx"
 
 # O2: consent table without immutability policy
 check \
-  "O2. legal_consents / consent table — confirm UPDATE is blocked via RLS WITH CHECK (false)" \
+  "O2. legal_consents / consent table - confirm UPDATE is blocked via RLS WITH CHECK (false)" \
   'CREATE[[:space:]]+TABLE[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+)?(legal_consents|consent_log|consent_records|minor_consents)' \
   --include="*.sql"
 
 # ── P. Password reset token safety ────────────────────────────────────────────
 # P1: token compared with === (should be constant-time hash comparison)
 check \
-  "P1. Password-reset token compared with === — compare SHA-256 hashes with constant-time equality" \
+  "P1. Password-reset token compared with === - compare SHA-256 hashes with constant-time equality" \
   '(reset_token|resetToken|token)\s*===\s*(req\.|body\.|params\.|row\.)' \
   --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
   --include="*.mjs"

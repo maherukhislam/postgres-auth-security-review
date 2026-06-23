@@ -44,7 +44,7 @@ Full reasoning, CVE case studies, and exact parameters are in
 
 ---
 
-## B. Row-Level Security — the #1 failure class
+## B. Row-Level Security - the #1 failure class
 
 - Every user-data table needs `ENABLE ROW LEVEL SECURITY`. RLS is off by
   default; Supabase dashboard enables it for new tables created via the UI
@@ -59,7 +59,7 @@ Full reasoning, CVE case studies, and exact parameters are in
 - **CVE-2024-10976:** Query plan caching can apply the wrong RLS policy when
   a plan is created under one role and reused under another via `SET ROLE` or
   a `SECURITY DEFINER` function. Fixed in 17.1, 16.5, 15.9, 14.14, 13.17.
-- Supabase Storage buckets are a separate RLS surface — `storage.objects`
+- Supabase Storage buckets are a separate RLS surface - `storage.objects`
   needs its own policies exactly like tables.
 - Test RLS as a non-owner, non-superuser role. Testing as the table owner
   means policies are never applied.
@@ -76,7 +76,7 @@ running queries). This pattern is valid but carries specific failure modes:
 - **Fail-open on RPC error:** If the RPC that sets the session variable
   throws or is skipped due to an early return, the subsequent queries run
   without an RLS context. The RLS policy must be written to fail-closed
-  (return no rows / deny writes) when the session variable is absent — not
+  (return no rows / deny writes) when the session variable is absent - not
   just when it is set to the wrong value.
   ```sql
   -- SAFE: fails closed when variable is not set
@@ -87,7 +87,7 @@ running queries). This pattern is valid but carries specific failure modes:
   ```
 - **Admin bypass must be explicit and narrow:** If `is_admin()` or an
   equivalent function grants full table access, verify it reads from the
-  same session variable — not a hard-coded role name or a table the
+  same session variable - not a hard-coded role name or a table the
   attacker can influence. `is_admin()` must also fail-closed when the
   session context is missing, not return `true` by default.
 - **Single connection per request:** Connection pools that multiplex multiple
@@ -124,7 +124,7 @@ running queries). This pattern is valid but carries specific failure modes:
 
 ---
 
-## E. SQL injection — application and database layers
+## E. SQL injection - application and database layers
 
 - Parameterize all queries. `$1, $2, ...` in Postgres; ORM-bound elsewhere.
   No string concatenation anywhere.
@@ -142,7 +142,7 @@ running queries). This pattern is valid but carries specific failure modes:
 - **Argon2id** for all new code: memory ≥ 19 MiB, iterations ≥ 2,
   parallelism ≥ 1.
 - **bcrypt** for existing codebases: cost factor ≥ 12. bcrypt silently
-  truncates at 72 bytes — pre-hash long passphrases with SHA-256.
+  truncates at 72 bytes - pre-hash long passphrases with SHA-256.
 - Never `md5()`, `crypt()`, `SHA-256 alone`, or any fast hash for passwords.
 - Never hash inside SQL. Hash at the application layer.
 - NIST SP 800-63B: 8 chars min with MFA, 15 without. Accept up to 64.
@@ -175,7 +175,7 @@ standard JWT library. This is valid but requires strict discipline:
 - **HMAC secret rotation:** The secret used to sign tokens must be ≥ 256 bits
   of cryptographically random entropy, stored in environment variables, never
   in source code, and rotated whenever exposure is suspected. A rotated secret
-  immediately invalidates all current sessions — plan for graceful re-login.
+  immediately invalidates all current sessions - plan for graceful re-login.
 - **Use constant-time comparison for token equality checks.** Any place in
   the code that compares a token, token hash, or HMAC output with `===` or
   `==` is vulnerable to timing attacks. Use `crypto.timingSafeEqual()` (Node)
@@ -197,7 +197,7 @@ create specific failure modes:
 - **`nodejs_compat` / edge runtime differences:** Edge runtimes may not
   support all Node.js crypto primitives. Test that `crypto.subtle`,
   `crypto.timingSafeEqual`, and any hash function used in auth work correctly
-  in the target runtime — fallbacks to `Math.random()` or non-crypto APIs
+  in the target runtime - fallbacks to `Math.random()` or non-crypto APIs
   are bugs, not degraded-mode behavior.
 - **No shared mutable state between requests.** Serverless functions can have
   warm instances that serve multiple sequential requests. A variable declared
@@ -220,7 +220,7 @@ Applications that store sensitive files (documents, certificates, passports)
 in object storage have a surface area that RLS does not cover:
 
 - **Bucket must be private.** Never configure a bucket holding sensitive
-  documents as public — not even "public with signed URLs required." A public
+  documents as public - not even "public with signed URLs required." A public
   bucket means any URL that leaks (logs, referrer headers, share-link misuse)
   gives unauthenticated access.
 - **Object keys must not be guessable.** A key like
@@ -239,7 +239,7 @@ in object storage have a surface area that RLS does not cover:
 - **Object key ownership must be checked before issuing a signed URL.**
   When a user requests a download link, the API must verify that the
   `object_key` belongs to the requesting user's records before calling the
-  storage SDK — not just verify the JWT. This is IDOR at the storage layer.
+  storage SDK - not just verify the JWT. This is IDOR at the storage layer.
 - **Delete alongside DB rows.** When a document record is deleted from the
   database, the corresponding object in storage must be deleted too, or
   storage becomes an orphaned data leak.
@@ -252,7 +252,7 @@ in object storage have a surface area that RLS does not cover:
   (or whichever algorithm the system uses) server-side. Never trust the `alg`
   field from the token header.
 - Reject `alg: none` and all case variants (`nOnE`, `NONE`).
-- **Supabase 2025/2026 key changes:** `service_role` bypasses all RLS — keep
+- **Supabase 2025/2026 key changes:** `service_role` bypasses all RLS - keep
   server-only. Supabase now auto-revokes secret keys detected in public repos.
 - Short token lifetimes. Access tokens ≤ 15 minutes; refresh tokens rotated
   on use and invalidated on logout.
@@ -277,7 +277,7 @@ in object storage have a surface area that RLS does not cover:
 - Webhook endpoints verify the payload signature before processing.
 - OAuth flows must use `state` (CSRF token) and PKCE
   (`code_challenge`/`code_verifier`).
-- **CVE-2025-29927 (CVSS 9.1) — Next.js middleware bypass.** Sending
+- **CVE-2025-29927 (CVSS 9.1) - Next.js middleware bypass.** Sending
   `x-middleware-subrequest` bypasses all Next.js Middleware on self-hosted
   deployments < 12.3.5, < 13.5.9, < 14.2.25, < 15.2.3. Upgrade immediately.
   Always validate sessions/JWTs in the API route or action itself too.
@@ -330,7 +330,7 @@ additional checks that are easy to break:
   archived. A boolean `has_guardian_consent = true` without the supporting
   record has no legal or audit value.
 - **Consent records must be immutable.** Write guardian and legal consent
-  records with no `UPDATE` path — only `INSERT`. Add an RLS `WITH CHECK`
+  records with no `UPDATE` path - only `INSERT`. Add an RLS `WITH CHECK`
   policy that prevents the application role from modifying them after the
   fact. An attacker who compromises an account should not be able to
   retroactively forge consent.
@@ -355,13 +355,13 @@ additional checks that are easy to break:
 - `service_role` / secret keys must never appear in `NEXT_PUBLIC_` env vars,
   client components, browser bundles, git history, or error responses.
 - Secrets are rotated after any suspected exposure. Deleting from git history
-  does not remove from clone history — rotation is mandatory.
+  does not remove from clone history - rotation is mandatory.
 - Disable the Supabase Data API (auto-generated REST/GraphQL) if the app uses
   direct DB connections; reduces the public attack surface.
 
 ---
 
-## O. Before marking done — final scan gate
+## O. Before marking done - final scan gate
 
 Run `scripts/scan_auth_security.sh` on the diff and clear every finding.
 Minimum checks:
@@ -389,7 +389,7 @@ Minimum checks:
 
 ---
 
-## P. Engineering trade-offs — security without killing performance
+## P. Engineering trade-offs - security without killing performance
 
 Security and performance are not opposites. Most security slowdowns are
 symptoms of a wrong implementation, not an inherent cost of the control
@@ -400,7 +400,7 @@ choose.
 
 The deliberate slowness of bcrypt and Argon2id is the security feature.
 An attacker who steals your database hash file faces the same cost per guess
-that you face on login — but your users log in once; the attacker has to try
+that you face on login - but your users log in once; the attacker has to try
 millions. Do not weaken the cost factor to gain speed. Find the right runtime.
 
 **The problem on edge workers:** Pure JavaScript implementations of Argon2id
@@ -408,18 +408,18 @@ consume ~14,000ms CPU time per hash in a V8 isolate. Pure JavaScript bcrypt
 runs ~2,000ms. <cite index="2-1">On Cloudflare Workers' free tier the CPU limit is 10ms, making
 pure-JS Argon2id completely unusable.</cite> Even on the paid tier, <cite index="4-1">a bcrypt
 cost-12 hash taking 250ms means a single core does about 4 logins per second
-before requests queue</cite> — a login-spike DoS from the hash function itself.
+before requests queue</cite> - a login-spike DoS from the hash function itself.
 
 **The correct architectural response:**
 - **Separate the hashing.** Move password hashing out of the main edge function
   into a dedicated backend service with proper CPU resources. On Cloudflare
   this is a Rust-based Worker accessed via <cite index="2-1">a Cloudflare Service Binding,
-  achieving ~100ms CPU time — the same Argon2id security at a practical cost</cite>.
+  achieving ~100ms CPU time - the same Argon2id security at a practical cost</cite>.
   On other stacks, use a queue (send hash job, return token, confirm later) or
   a traditional server endpoint that the edge function delegates to.
 - **Never weaken the algorithm as a "fix" for edge performance.** If you
   cannot run bcrypt cost 12 on your runtime, the answer is to change the
-  runtime or add a dedicated service — not to drop to cost 8.
+  runtime or add a dedicated service - not to drop to cost 8.
 - **Always use the async API.** Synchronous bcrypt (`bcrypt.hashSync`)
   blocks the entire event loop and kills concurrency for all users. Always
   use `bcrypt.hash()` / `argon2.hash()` (async).
@@ -433,7 +433,7 @@ before requests queue</cite> — a login-spike DoS from the hash function itself
 ### P2. Row-Level Security: the performance issue is almost always a missing index
 
 RLS itself is not slow. <cite index="15-1">At 100K rows with no index, RLS adds ~1.6ms of
-overhead on a count query — less than 2% difference from no RLS.</cite>
+overhead on a count query - less than 2% difference from no RLS.</cite>
 The performance cliff people hit is a sequential scan caused by a missing
 index on the column used in the policy predicate.
 
@@ -441,7 +441,7 @@ index on the column used in the policy predicate.
 <cite index="12-1">For a policy like `USING (user_id = current_user_id())`, adding a
 B-tree index on `user_id` has been seen to give over 100× improvement on large
 tables.</cite> <cite index="15-1">Adding that index drops the same count query from ~73ms to
-~2.2ms — a 26× speedup — while RLS overhead within the indexed condition
+~2.2ms - a 26× speedup - while RLS overhead within the indexed condition
 stays below 25%.</cite>
 
 ```sql
@@ -460,7 +460,7 @@ row scanned:
 -- SLOW: current_user_id() is called once per row
 USING (public.current_user_id() = user_id)
 
--- FAST: (SELECT ...) triggers an initPlan — Postgres evaluates it once
+-- FAST: (SELECT ...) triggers an initPlan - Postgres evaluates it once
 -- and reuses the value for every row in the query
 USING ((SELECT public.current_user_id()) = user_id)
 ```
@@ -503,7 +503,7 @@ acceptable for low-traffic applications, but there are faster options.
 
 <cite index="23-1">**Do not use Workers KV for rate limiting.** KV is eventually
 consistent. Two concurrent requests can both read the same stale count,
-both decide they are under the limit, and both proceed — which is exactly
+both decide they are under the limit, and both proceed - which is exactly
 what rate limiting is supposed to prevent.</cite>
 
 **On Cloudflare Workers, use Durable Objects for rate limiting.** <cite index="21-1">Durable
@@ -513,7 +513,7 @@ operations.</cite> Create one Durable Object per IP or per user identifier
 (not one global object for all traffic):
 
 ```javascript
-// One DO per IP — strongly consistent, no race condition
+// One DO per IP - strongly consistent, no race condition
 const id = env.RATE_LIMITER.idFromName(`login:${clientIp}`);
 const stub = env.RATE_LIMITER.get(id);
 const allowed = await stub.fetch('/check');
@@ -571,13 +571,13 @@ so stale KV session state has a bounded validity window.
 Every serverless invocation would open a new TCP+TLS connection to Postgres
 without a connection pooler. At scale that exceeds Postgres's connection
 limit and degrades performance for everyone. A connection pooler is not
-optional at serverless scale — it is a correctness requirement.
+optional at serverless scale - it is a correctness requirement.
 
 **Supabase:** Use Supavisor (the built-in pooler) in **transaction mode**
 for serverless/edge. Transaction mode means each query gets a fresh
 connection from the pool, and the connection is returned immediately after
 the transaction ends. This is why `SET LOCAL` (transaction-scoped) is the
-security-correct choice for RLS session variables — it automatically clears
+security-correct choice for RLS session variables - it automatically clears
 when the connection goes back to the pool, preventing context leakage to the
 next user. Session mode (`SET` without `LOCAL`) is incompatible with
 transaction-mode pooling for this reason.
@@ -617,7 +617,7 @@ async function getDocumentUrl(docId, userId) {
 }
 ```
 
-Note: KV's eventual consistency is acceptable here — a slightly stale cached
+Note: KV's eventual consistency is acceptable here - a slightly stale cached
 URL still works until its actual expiry. The ownership check happens on cache
 miss (generation), not on cache hit, which is the correct security model.
 

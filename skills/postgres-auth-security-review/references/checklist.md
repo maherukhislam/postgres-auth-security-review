@@ -1,4 +1,4 @@
-# Postgres & Auth Security — Full Reference
+# Postgres & Auth Security - Full Reference
 
 Detailed reasoning, exact parameters, and full CVE records backing `SKILL.md`.
 Researched against OWASP, NIST, PostgreSQL advisory pages, and published
@@ -20,7 +20,7 @@ incident reports. Current to mid-2026.
 
 Versions 12 and 13 reached end-of-life in November 2024. Do not run them.
 
-### CVE-2025-1094 — psql SQL injection (CVSS 8.1)
+### CVE-2025-1094 - psql SQL injection (CVSS 8.1)
 `psql` mishandles invalid UTF-8 byte sequences in `PQescapeLiteral()` and
 related libpq escape functions. An attacker who can inject input can escape
 the quoting and reach raw SQL, then use psql's `\!` meta-command for OS
@@ -34,7 +34,7 @@ and a heap buffer overflow respectively. Fixed in 18.2, 17.8, 16.12.
 
 ---
 
-## 2. Row-Level Security — full failure taxonomy
+## 2. Row-Level Security - full failure taxonomy
 
 ### Off by default
 `ENABLE ROW LEVEL SECURITY` must be applied explicitly to every table.
@@ -57,7 +57,7 @@ are frequently created as scaffolding and never tightened.
 `USING` governs `SELECT` and `DELETE`. `WITH CHECK` governs `INSERT` and
 `UPDATE`. A policy providing only `USING` leaves writes completely unguarded.
 
-### Table-owner bypass — the invisible one
+### Table-owner bypass - the invisible one
 Superusers, roles with `BYPASSRLS`, and the table owner all skip RLS unless
 the table has `FORCE ROW LEVEL SECURITY`. Many ORMs and migration tools
 connect as the table owner, making all policies silently ineffective.
@@ -69,7 +69,7 @@ CREATE POLICY tenant_isolation ON invoices
   WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid);
 ```
 
-### CVE-2024-10976 — query plan caching discards correct policy
+### CVE-2024-10976 - query plan caching discards correct policy
 When a plan is created under one role and re-executed under another (via
 `SET ROLE`, `SECURITY DEFINER` functions, connection pool multiplexing,
 subqueries, or security-invoker views), Postgres may apply the wrong policy.
@@ -84,7 +84,7 @@ access only to the specific roles that need the aggregate data.
 
 ---
 
-## 3. Custom RLS session-binding — worked example and failure modes
+## 3. Custom RLS session-binding - worked example and failure modes
 
 A common pattern in custom-auth stacks: the edge function extracts a JWT,
 verifies it, then calls a PL/pgSQL RPC to set a session-level variable before
@@ -107,7 +107,7 @@ AS $$
 $$;
 ```
 
-**Failure mode 1 — fail-open policy:**
+**Failure mode 1 - fail-open policy:**
 ```sql
 -- RISKY: if current_user_id() returns NULL, this may throw or behave
 -- unpredictably depending on how NULL is handled in the comparison.
@@ -118,7 +118,7 @@ USING (public.current_user_id() = user_id)
 -- Explicitly document it as intentionally fail-closed.
 ```
 
-**Failure mode 2 — is_admin() fails open:**
+**Failure mode 2 - is_admin() fails open:**
 ```sql
 -- RISKY: returns true when session var absent or on any error
 CREATE FUNCTION is_admin() RETURNS bool LANGUAGE plpgsql AS $$
@@ -134,7 +134,7 @@ EXCEPTION WHEN OTHERS THEN
   RETURN false;
 ```
 
-**Failure mode 3 — SET vs SET LOCAL:**
+**Failure mode 3 - SET vs SET LOCAL:**
 ```sql
 -- SET (session-scoped): variable persists even after the transaction ends.
 -- In a connection pool, this leaks the user_id to the next request
@@ -146,12 +146,12 @@ SELECT set_config('app.current_user_id', uid, false);  -- false = session-scoped
 SELECT set_config('app.current_user_id', uid, true);   -- true = transaction-scoped
 ```
 
-**Failure mode 4 — RPC error not caught:**
+**Failure mode 4 - RPC error not caught:**
 If the call to `set_current_user()` throws an exception in the edge function
 and the error is swallowed or causes an early return that skips the query,
 the next call in the code may run queries without a set context. The query
-will see RLS filter as `NULL = user_id` which returns no rows — which is
-correct fail-closed behavior — but only if the query actually runs. If a
+will see RLS filter as `NULL = user_id` which returns no rows - which is
+correct fail-closed behavior - but only if the query actually runs. If a
 different code path bypasses the query and returns cached data, that cached
 data may not be RLS-filtered.
 
@@ -165,9 +165,9 @@ the search path can shadow trusted objects and run code with elevated
 permissions.
 
 The same root cause resurfaced in:
-- **CVE-2018-1058** — PUBLIC CREATE + search_path shadowing
-- **CVE-2020-14349** — logical replication left search_path unsanitized
-- **CVE-2023-2454** — schema_element syntax bypassed hardening
+- **CVE-2018-1058** - PUBLIC CREATE + search_path shadowing
+- **CVE-2020-14349** - logical replication left search_path unsanitized
+- **CVE-2023-2454** - schema_element syntax bypassed hardening
 
 Every SECURITY DEFINER function:
 ```sql
@@ -179,7 +179,7 @@ AS $$ BEGIN ... END; $$;
 
 ---
 
-## 5. Password hashing — exact parameters
+## 5. Password hashing - exact parameters
 
 ### Argon2id (preferred)
 - Memory: ≥ 19 MiB (OWASP 2026 baseline), 64 MiB if server allows
@@ -199,22 +199,22 @@ AS $$ BEGIN ... END; $$;
 
 ---
 
-## 6. Custom JWT with crypto.subtle — security requirements
+## 6. Custom JWT with crypto.subtle - security requirements
 
 ### Why custom implementations exist
 Serverless edge runtimes (Cloudflare Workers, Deno Deploy, etc.) often have
 restricted environments where standard JWT libraries either don't run or add
 significant bundle size. Rolling a custom HMAC-SHA256 JWT using the platform's
-`crypto.subtle` API is a legitimate choice — but the library's guardrails are
+`crypto.subtle` API is a legitimate choice - but the library's guardrails are
 gone, so you have to build them yourself.
 
 ### Algorithm pinning
 ```javascript
-// WRONG — algorithm comes from the token header, enabling confusion attack
+// WRONG - algorithm comes from the token header, enabling confusion attack
 const { alg } = JSON.parse(atob(token.split('.')[0]));
 const key = await crypto.subtle.importKey('raw', secret, { name: alg }, false, ['verify']);
 
-// CORRECT — algorithm is pinned server-side, header value ignored
+// CORRECT - algorithm is pinned server-side, header value ignored
 const ALGORITHM = { name: 'HMAC', hash: 'SHA-256' };
 const key = await crypto.subtle.importKey('raw', secret, ALGORITHM, false, ['verify']);
 const valid = await crypto.subtle.verify(ALGORITHM, key, signature, data);
@@ -230,7 +230,7 @@ if (!header.alg || header.alg.toLowerCase() === 'none') {
 ```
 
 ### Claim verification order
-1. `crypto.subtle.verify()` returns `true` — signature valid
+1. `crypto.subtle.verify()` returns `true` - signature valid
 2. Check `exp` > `Date.now() / 1000`
 3. Check `nbf` ≤ `Date.now() / 1000` (if present)
 4. Check `iat` is in a sane past range (reject future-dated tokens)
@@ -252,14 +252,14 @@ Reading claims before step 1 is a critical authentication bypass.
 - Generated with `crypto.getRandomValues()` or equivalent, never with
   `Math.random()` or a human-readable passphrase.
 - Stored in environment secrets, never in source code.
-- Rotation invalidates all active tokens immediately — plan for it.
+- Rotation invalidates all active tokens immediately - plan for it.
 
 ### Constant-time comparison
 ```javascript
-// WRONG — timing side-channel: comparison short-circuits on first mismatch
+// WRONG - timing side-channel: comparison short-circuits on first mismatch
 if (computed === received) { ... }
 
-// CORRECT — Web Crypto verify is constant-time by spec
+// CORRECT - Web Crypto verify is constant-time by spec
 const valid = await crypto.subtle.verify(ALGORITHM, key, receivedSig, data);
 
 // If comparing byte arrays directly:
@@ -271,7 +271,7 @@ timingSafeEqual(encoder.encode(a), encoder.encode(b));
 
 ---
 
-## 7. Serverless / edge function routing — failure modes
+## 7. Serverless / edge function routing - failure modes
 
 ### Catch-all routing without a top-level auth guard
 A pattern like:
@@ -281,7 +281,7 @@ export async function onRequest(context) {
   const path = context.params.path?.join('/') ?? '';
   if (path === 'login') return handleLogin(context);
   if (path === 'register') return handleRegister(context);
-  // Auth check happens inside each handler below — RISKY
+  // Auth check happens inside each handler below - RISKY
   if (path === 'profile') return handleProfile(context);
   if (path === 'documents') return handleDocuments(context);
 }
@@ -302,13 +302,13 @@ export async function onRequest(context) {
 
 ### Module-scope variable leakage between requests
 ```javascript
-// WRONG — warm instances share module scope
+// WRONG - warm instances share module scope
 let currentUser = null;
 export async function onRequest(context) {
   currentUser = await getUser(context); // leaks to concurrent requests
 }
 
-// CORRECT — all state inside the handler
+// CORRECT - all state inside the handler
 export async function onRequest(context) {
   const currentUser = await getUser(context);
 }
@@ -330,19 +330,19 @@ if (safePath.includes('..') || safePath.includes('%2e%2e')) {
 
 ### Object key design
 ```
-// INSECURE — guessable, IDOR via log leak
+// INSECURE - guessable, IDOR via log leak
 users/{user_id}/{filename}
 
-// SECURE — random prefix defeats directory traversal and enumeration
+// SECURE - random prefix defeats directory traversal and enumeration
 documents/{random_uuid}/{random_uuid}-{safe_filename}
 ```
 
 ### Pre-signed URL expiry
 ```javascript
-// WRONG — no expiry
+// WRONG - no expiry
 const url = await getSignedUrl(bucket, key);
 
-// CORRECT — short expiry, server verifies ownership first
+// CORRECT - short expiry, server verifies ownership first
 const doc = await db.query('SELECT object_key FROM documents WHERE id=$1 AND user_id=$2', [docId, userId]);
 if (!doc) return new Response('Not found', { status: 404 });
 const url = await getSignedUrl(bucket, doc.object_key, { expiresIn: 900 }); // 15 min
@@ -371,14 +371,14 @@ if (buffer.byteLength > 10 * 1024 * 1024) return new Response('Too large', { sta
 
 ---
 
-## 9. DB-backed rate limiting — atomic patterns
+## 9. DB-backed rate limiting - atomic patterns
 
 ### IP source
 ```javascript
-// WRONG — client-controlled header
+// WRONG - client-controlled header
 const ip = request.headers.get('X-Forwarded-For');
 
-// CORRECT — platform-verified header (Cloudflare)
+// CORRECT - platform-verified header (Cloudflare)
 const ip = request.headers.get('CF-Connecting-IP');
 // nginx
 const ip = request.headers.get('X-Real-IP');
@@ -460,7 +460,7 @@ await resetPassword(row.user_id, newPasswordHash);
 
 ---
 
-## 11. Minor / guardian consent — compliance checklist
+## 11. Minor / guardian consent - compliance checklist
 
 Required fields for a legally defensible consent record:
 
@@ -582,16 +582,16 @@ if (getAgeYears(body.date_of_birth) < 18) {
 
 ## 14. Sources
 
-- OWASP Top 10:2025 — owasp.org/Top10/2025
-- OWASP Password Storage & Authentication Cheat Sheets — cheatsheetseries.owasp.org
-- NIST SP 800-63B — pages.nist.gov/800-63-3/sp800-63b.html
-- PostgreSQL Security Advisories — postgresql.org/support/security
+- OWASP Top 10:2025 - owasp.org/Top10/2025
+- OWASP Password Storage & Authentication Cheat Sheets - cheatsheetseries.owasp.org
+- NIST SP 800-63B - pages.nist.gov/800-63-3/sp800-63b.html
+- PostgreSQL Security Advisories - postgresql.org/support/security
   - CVE-2018-1058, CVE-2019-10130, CVE-2020-14349, CVE-2023-2454
   - CVE-2023-39417, CVE-2024-10976, CVE-2025-1094
   - CVE-2025-8714, CVE-2025-8715, CVE-2026-2004, CVE-2026-2005
-- pgjdbc channel-binding bypass (2025-06-11) — github.com/pgjdbc/pgjdbc
-- CVE-2025-29927 (Next.js middleware bypass) — projectdiscovery.io
-- CVE-2025-48757 (Supabase/Lovable RLS exposure) — disclosed May 2025
-- Supabase Security Retro 2025 — supabase.com/blog
-- Web Crypto API specification — w3.org/TR/WebCryptoAPI
-- Cloudflare Workers / Pages Functions runtime docs — developers.cloudflare.com
+- pgjdbc channel-binding bypass (2025-06-11) - github.com/pgjdbc/pgjdbc
+- CVE-2025-29927 (Next.js middleware bypass) - projectdiscovery.io
+- CVE-2025-48757 (Supabase/Lovable RLS exposure) - disclosed May 2025
+- Supabase Security Retro 2025 - supabase.com/blog
+- Web Crypto API specification - w3.org/TR/WebCryptoAPI
+- Cloudflare Workers / Pages Functions runtime docs - developers.cloudflare.com
