@@ -67,7 +67,7 @@ jobs:
                   print(f"ERROR: {e}")
               sys.exit(1)
 
-          print(f"OK — name={fm['name']!r}, description={len(desc)} chars")
+          print(f"OK - name={fm['name']!r}, description={len(desc)} chars")
           PY
 
       - name: Check scan script is executable and has no syntax errors
@@ -89,7 +89,7 @@ jobs:
           const result = await db.query("SELECT * FROM users WHERE id = $1", [id]);
           jwt.verify(token, secret, { algorithms: ["RS256"] });
           JS
-          # The script always matches jwt.verify calls for manual review — that is
+          # The script always matches jwt.verify calls for manual review - that is
           # expected and not a failure. A clean run exits 1 only if it finds real
           # red flags, not the jwt.verify advisory. We check it doesn't crash.
           bash skills/postgres-auth-security-review/scripts/scan_auth_security.sh /tmp/clean \
