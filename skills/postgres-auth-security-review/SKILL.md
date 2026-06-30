@@ -5,9 +5,9 @@ license: MIT
 compatibility: Works with any agent that supports the agentskills.io standard (Codex CLI, Antigravity, Claude Code, Cursor, Gemini CLI, GitHub Copilot). Scan script requires bash and grep.
 metadata:
   author: maherukhislam
-  version: "1.3.0"
+  version: "1.5.0"
   tags: security postgres supabase authentication rls jwt cve cloudflare r2 edge serverless custom-jwt
-  references: OWASP Top 10:2025, NIST SP 800-63B, CVE-2025-1094, CVE-2025-29927, CVE-2025-48757, CVE-2024-10976, CVE-2026-2004, CVE-2026-2005
+  references: OWASP Top 10:2025, NIST SP 800-63B, CVE-2025-1094, CVE-2025-29927, CVE-2025-48757, CVE-2024-10976, CVE-2026-2004, CVE-2026-2005, CVE-2026-6472, CVE-2026-6473, CVE-2026-6475, CVE-2026-6477, CVE-2026-6478, CVE-2026-6479, CVE-2026-6637, CVE-2026-6638
 ---
 
 # Postgres & Auth Security Review
@@ -27,24 +27,64 @@ Full reasoning, CVE case studies, and exact parameters are in
 
 ## A. PostgreSQL version & patch status
 
-- **Run supported, patched Postgres.** As of mid-2026 that means 14.23+,
-  15.18+, 16.14+, 17.10+, or 18.4+.
-- **CVE-2025-1094 (CVSS 8.1):** SQL injection in psql via invalid UTF-8 in
-  `PQescapeLiteral()` / `PQescapeIdentifier()`. Exploited in the 2024 US
-  Treasury breach chain. Fixed in 17.3, 16.7, 15.11, 14.16, 13.19.
-- **CVE-2026-2004 (CVSS 8.8):** `intarray` extension arbitrary code
-  execution. Fixed in 18.2, 17.8, 16.12.
-- **CVE-2026-2005 (CVSS 8.8):** `pgcrypto` heap buffer overflow, code
-  execution as the OS user running the DB. Fixed in 18.2, 17.8, 16.12.
+- **Run supported, patched Postgres.** As of June 2026, safe minimums are
+  14.23+, 15.18+, 16.14+, 17.10+, or 18.4+. **PostgreSQL 14 reaches
+  end-of-life on November 12, 2026** - begin migration to 16 or 17 now.
+- **May 2026 release (18.4 / 17.10 / 16.14 / 15.18 / 14.23):** The largest
+  single-batch security release in PostgreSQL's history fixed 11 CVEs. Patch
+  immediately - three are CVSS 8.8 with practical exploit paths.
+- **CVE-2026-6473 (CVSS 8.8):** Integer wraparound in server memory-allocation
+  calculations allows an application-input provider to trigger an out-of-bounds
+  write and crash or compromise the backend. Also affects `intarray` and
+  `ltree` extension parsing. Fixed in 18.4, 17.10, 16.14, 15.18, 14.23.
+- **CVE-2026-6475 (CVSS 8.8):** Path traversal in `pg_basebackup` and
+  `pg_rewind` via symlink following. OS account hijack on the client running
+  the backup tool. Fixed in 18.4, 17.10, 16.14, 15.18, 14.23.
+- **CVE-2026-6477 (CVSS 8.8):** `PQfn()` in libpq is not passed an output
+  buffer size. A malicious server superuser can overwrite client stack memory
+  via `lo_export()`, `lo_read()`, `pg_dump`. Fixed in 18.4, 17.10, 16.14,
+  15.18, 14.23.
+- **CVE-2026-6472 (CVSS 5.4):** `CREATE TYPE` does not check `CREATE`
+  privilege on the target schema, allowing an object creator to shadow
+  extension-defined types and hijack `search_path` queries - same class as
+  CVE-2018-1058. Fixed in 18.4, 17.10, 16.14, 15.18, 14.23.
+- **CVE-2026-6478 (CVSS 6.5):** Covert timing channel in MD5 password
+  comparison during authentication. An attacker with repeated connection
+  access can incrementally recover credentials. **SCRAM-SHA-256 is immune.**
+  Only affects clusters with MD5 password hashes remaining from upgrades of
+  PostgreSQL 13 or earlier. Run `SELECT rolname FROM pg_authid WHERE
+  rolpassword LIKE 'md5%';` - if it returns rows, migrate those passwords
+  to SCRAM. Fixed in 18.4, 17.10, 16.14, 15.18, 14.23.
+- **CVE-2026-6479 (CVSS 7.5):** Uncontrolled recursion in SSL/GSS startup
+  negotiation. An unauthenticated client can crash the PostgreSQL backend
+  by alternating rejected SSL/GSS requests. Affects any instance reachable
+  by untrusted clients. Fixed in 18.4, 17.10, 16.14, 15.18, 14.23.
+- **CVE-2026-6638 (CVSS 3.7):** SQL injection in `ALTER SUBSCRIPTION …
+  REFRESH PUBLICATION` via unquoted table names. Fires on the publisher at
+  next refresh - relevant for multi-tenant or federated logical replication
+  setups. Fixed in 18.4, 17.10, 16.14 (affects v16+).
+- **CVE-2026-6637 (CVSS TBD):** Stack buffer overflow plus SQL injection in
+  `contrib/spi` (`refint` module). Any deployment with `refint` loaded is
+  vulnerable to code execution by an unprivileged DB user. Drop `refint` -
+  it was obsoleted by native foreign keys decades ago.
+- **CVE-2025-1094 (CVSS 8.1):** psql SQL injection via invalid UTF-8 in
+  `PQescapeLiteral()`. Exploited in the 2024 US Treasury breach chain.
+  Fixed in 17.3, 16.7, 15.11, 14.16, 13.19.
+- **CVE-2026-2004 / CVE-2026-2005 (CVSS 8.8):** `intarray` and `pgcrypto`
+  extension arbitrary code execution. Fixed in 18.2, 17.8, 16.12.
 - **CVE-2025-8714 / CVE-2025-8715:** `pg_dump` object-name injection.
   Fixed in 17.6, 16.10, 15.14, 14.19, 13.22.
-- **pgjdbc channel-binding bypass (2025-06-11, CVSS 8.2):** Versions
-  42.7.4–42.7.6 silently downgrade auth, enabling MITM. Upgrade to 42.7.7+.
-- Flag any connection string, Dockerfile, or manifest below these minimums.
+- **pgjdbc channel-binding bypass (CVSS 8.2):** Versions 42.7.4-42.7.6
+  silently downgrade auth. Upgrade to pgjdbc 42.7.7+.
+- **pg_hba.conf auth method:** Any connection entry still using `md5` is
+  vulnerable to CVE-2026-6478. Change to `scram-sha-256`. This is the
+  default since PostgreSQL 14 but legacy clusters upgraded from PG13 may
+  still have `md5` entries.
+- Flag any Dockerfile, manifest, or connection string below these minimums.
 
 ---
 
-## B. Row-Level Security - the #1 failure class
+## B. Row-Level Security: the #1 failure class
 
 - Every user-data table needs `ENABLE ROW LEVEL SECURITY`. RLS is off by
   default; Supabase dashboard enables it for new tables created via the UI
@@ -124,7 +164,7 @@ running queries). This pattern is valid but carries specific failure modes:
 
 ---
 
-## E. SQL injection - application and database layers
+## E. SQL injection: application and database layers
 
 - Parameterize all queries. `$1, $2, ...` in Postgres; ORM-bound elsewhere.
   No string concatenation anywhere.
@@ -277,7 +317,7 @@ in object storage have a surface area that RLS does not cover:
 - Webhook endpoints verify the payload signature before processing.
 - OAuth flows must use `state` (CSRF token) and PKCE
   (`code_challenge`/`code_verifier`).
-- **CVE-2025-29927 (CVSS 9.1) - Next.js middleware bypass.** Sending
+- **CVE-2025-29927 (CVSS 9.1): Next.js middleware bypass.** Sending
   `x-middleware-subrequest` bypasses all Next.js Middleware on self-hosted
   deployments < 12.3.5, < 13.5.9, < 14.2.25, < 15.2.3. Upgrade immediately.
   Always validate sessions/JWTs in the API route or action itself too.
@@ -361,7 +401,7 @@ additional checks that are easy to break:
 
 ---
 
-## O. Before marking done - final scan gate
+## O. Before marking done: final scan gate
 
 Run `scripts/scan_auth_security.sh` on the diff and clear every finding.
 Minimum checks:
@@ -389,7 +429,7 @@ Minimum checks:
 
 ---
 
-## P. Engineering trade-offs - security without killing performance
+## P. Engineering trade-offs: security without killing performance
 
 Security and performance are not opposites. Most security slowdowns are
 symptoms of a wrong implementation, not an inherent cost of the control
@@ -466,7 +506,7 @@ USING ((SELECT public.current_user_id()) = user_id)
 ```
 
 <cite index="11-1">This approach wrapping functions in SELECT statements can improve
-query performance by 57–61% for common query types.</cite> It is only valid for
+query performance by 57-61% for common query types.</cite> It is only valid for
 functions whose result does not change based on row data (i.e., they don't
 take row columns as input).
 
@@ -508,7 +548,7 @@ what rate limiting is supposed to prevent.</cite>
 
 **On Cloudflare Workers, use Durable Objects for rate limiting.** <cite index="21-1">Durable
 Objects provide strong consistency (strict serializability) and can handle
-approximately 500–1,000 requests per second per object for simple
+approximately 500-1,000 requests per second per object for simple
 operations.</cite> Create one Durable Object per IP or per user identifier
 (not one global object for all traffic):
 
@@ -561,7 +601,7 @@ RSA is required only when third parties need to verify tokens without sharing
 a secret.
 
 **KV for session data is appropriate.** <cite index="20-1">Cloudflare recommends Workers
-KV for session tokens: hot keys see latency of 500µs–10ms, writes happen
+KV for session tokens: hot keys see latency of 500µs-10ms, writes happen
 only on login/logout, and eventual consistency rarely matters since users
 typically interact with one edge location.</cite> Use short-lived JWTs (≤ 1 hour)
 so stale KV session state has a bounded validity window.
@@ -638,3 +678,356 @@ Instrument first.
   may collapse at 50 req/s due to bcrypt CPU saturation. Load-test auth
   endpoints specifically at the expected concurrent-user count, not just
   average throughput.
+
+---
+
+## Q. Login and signup flow edge cases
+
+Every authentication flow has a set of edge cases that are either silently
+ignored or handled insecurely in most codebases. This section defines the
+correct behavior for each one. Get these wrong and you either leak account
+information to attackers or create a broken experience for real users.
+
+The core rule that governs everything below: **unauthenticated requests must
+never reveal whether a specific email address has an account.** An attacker
+who can distinguish "email exists" from "email not found" can enumerate your
+entire user base one address at a time.
+
+### Q1. Signup with an email that already has an account
+
+**What most apps do:** Return an error like "Email already registered."
+**Why this is wrong:** It confirms to an attacker that the email is in the
+database. If they are targeting a specific person, they now know that person
+is a user of your service.
+
+**Correct behavior:**
+- Return the same success-looking response as a normal signup: "Check your
+  inbox to verify your email."
+- In the background, send a different email to the address on file: "Someone
+  tried to register a new account with your email address. If this was you
+  and you forgot your password, use the link below to reset it. If this was
+  not you, no action is needed."
+- This gives the real account owner a security notification while revealing
+  nothing to the person who submitted the form.
+
+**Special sub-cases:**
+- **Email exists but account is unverified:** Resend the verification email
+  instead of creating a duplicate. Same outward response.
+- **Email exists but account was deleted:** Treat as a fresh signup. Deleted
+  accounts should not block re-registration. If you soft-delete, check
+  whether the email is in the active OR the deleted set before deciding.
+- **Email exists via OAuth/SSO with no password set:** Send an email
+  explaining the account uses social login, with a link to add a password if
+  desired. Do not create a duplicate password-based account for the same
+  email.
+- **Email exists but is pending minor/guardian consent:** Do not reveal this
+  state. Treat it as a normal "check your inbox" response. The in-progress
+  consent flow gets a separate notification.
+
+### Q2. Login failures: wrong password vs email not found
+
+**Both must return exactly the same message and take the same time.**
+
+```
+"Incorrect email or password."
+```
+
+Never:
+- "No account found with that email."
+- "Wrong password."
+- "Account not found." vs "Invalid credentials." (even subtle wording
+  differences are enumerable at scale)
+
+**Timing:** bcrypt/Argon2id adds natural latency to a successful password
+check. When the email does not exist, there is no hash to compare against, so
+the response returns faster. An attacker measuring response times can
+distinguish the two even with identical messages.
+
+Fix: always run the hash comparison even when the email is not found, against
+a dummy hash stored at startup:
+
+```javascript
+// At startup - load once, reuse for all "not found" comparisons
+const DUMMY_HASH = await bcrypt.hash('dummy-value-never-used', 12);
+
+async function login(email, password) {
+  const user = await db.getUserByEmail(email);
+
+  if (!user) {
+    // Always compare to prevent timing-based enumeration
+    await bcrypt.compare(password, DUMMY_HASH);
+    return invalidCredentials();
+  }
+
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) return invalidCredentials();
+
+  return issueSession(user);
+}
+```
+
+### Q3. Login with a valid email and password, but account has a special state
+
+These are the cases where a user's credentials are technically correct but
+the login should still be blocked. Each requires a different response
+strategy depending on whether revealing the state leaks information.
+
+| Account state | What to tell the user | Security note |
+|---|---|---|
+| Email not verified | "Please verify your email before logging in. Resend link?" | Reveals account exists - acceptable tradeoff for UX; document this decision |
+| Account locked (too many attempts) | "Your account is temporarily locked. Try again in X minutes or reset your password." | Lock on the account identifier, not the IP |
+| Account disabled by admin | "This account has been suspended. Contact support." | Do not specify why unless the user is authenticated in a support channel |
+| Account pending approval | "Your account is under review. You will receive an email when it is approved." | Only reveal this if your signup flow explicitly promises a review step |
+| MFA required, not yet provided | Redirect to MFA step. Do not complete login. | Session at this point must be a partial "pre-MFA" session with no data access |
+| MFA code wrong | "Incorrect code. X attempts remaining." | Rate-limit and lock MFA separately from the password step |
+
+**Account lockout specifics:**
+- Lock on the email/username, not the IP. An attacker using a proxy pool
+  bypasses IP-based lockout trivially.
+- Lock on BOTH, independently. An attacker targeting one account from many
+  IPs is stopped by email-based lockout. Many accounts from one IP is stopped
+  by IP-based lockout.
+- Unlock via time (preferred) or via password-reset email (also acceptable).
+  Do not unlock automatically on a correct password without resetting the
+  counter - this allows slow-rate attacks.
+- Log every lockout event with IP, user agent, and timestamp for audit.
+
+### Q4. Password reset edge cases
+
+**Reset request for a non-existent email:**
+Always respond: "If an account exists with that email, a reset link has been
+sent." Never distinguish between "sent" and "not sent."
+
+**Multiple reset requests for the same email:**
+Each new reset request must invalidate all previous unredeemed tokens for
+that user. A user who requests three resets should only be able to use the
+link from the third email. Store the token hash in the database and check
+`used = false` - when issuing a new token, set all previous tokens for
+that `user_id` to `used = true`.
+
+```sql
+-- Invalidate all previous tokens before inserting the new one
+UPDATE password_reset_tokens
+SET used = true
+WHERE user_id = $1 AND used = false;
+
+INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+VALUES ($1, $2, now() + interval '1 hour');
+```
+
+**Reset token reuse:**
+Mark the token as used the moment it is verified, before the password is
+changed. If the password change fails after marking the token used, issue a
+new token rather than re-enabling the old one. This prevents a race condition
+where two concurrent redemptions of the same token both succeed.
+
+**Reset for a locked account:**
+Allow it. Password reset is the intended unlock mechanism. After a
+successful reset, clear the failed-attempt counter and unlock the account.
+
+**Reset for an unverified account:**
+Allow it, but also mark the email as verified on success. A user who can
+receive email at that address has effectively verified it.
+
+**Reset token expiry:**
+Tokens must expire. One hour is the standard. After expiry, the link in the
+email must show a clear "This link has expired" message with a direct link to
+request a new one - not a generic 404 or 500.
+
+### Q5. Re-registration after account deletion
+
+If your app supports account deletion, define clearly whether deletion is
+hard (permanent) or soft (flag in DB, data retained). The behavior differs:
+
+- **Hard delete:** The email is fully released. A new signup with that email
+  creates a fresh account with no history. Treat exactly like a first-time
+  signup.
+- **Soft delete:** The email is technically still in the database.
+  - Do not tell the person signing up that a deleted account exists for that
+    email (this leaks that someone previously used the service).
+  - Either release the email at deletion time (set it to a hashed/anonymous
+    value) so it is freely re-registrable, or re-activate the old record if
+    you need to preserve history.
+  - If you re-activate: send a "Welcome back" email and explain the account
+    was restored, so the user is not confused by seeing old data.
+
+### Q6. Concurrent and cross-device session handling
+
+Decide on a session policy and enforce it consistently:
+
+- **Unlimited sessions (default for most apps):** Every login issues a new
+  session. Old sessions remain valid until they expire or the user explicitly
+  logs out. Simple but means a compromised device stays active until expiry.
+- **Single active session:** Each new login invalidates all previous sessions.
+  Store a session version counter on the user record; increment it on every
+  login; embed it in the JWT. On each request, verify the counter in the
+  token matches the one in the database. Slower (requires a DB read per
+  request) but gives the user effective "log out everywhere" control.
+- **Capped sessions (e.g., max 5 devices):** Track active sessions in a table.
+  On login, if the cap is reached, invalidate the oldest session. Show the
+  user their active sessions in account settings so they can audit them.
+
+Regardless of which policy you choose:
+- Always invalidate all sessions on password change.
+- Always invalidate all sessions on email change.
+- Provide a "log out all other devices" button in account settings.
+
+### Q7. The complete response decision matrix
+
+```
+Unauthenticated request           Reveal?   Message
+------------------------------------------------------------------
+"Is this email registered?"        NO        Never expose this endpoint
+Signup: email already exists       NO        "Check your inbox"
+Signup: email already unverified   NO        "Check your inbox" (resend)
+Signup: email from deleted acct    NO        "Check your inbox"
+Login: email not found             NO        "Incorrect email or password"
+Login: email found, wrong pass     NO        "Incorrect email or password"
+Login: account locked              YES*      "Account temporarily locked"
+Login: account unverified          YES*      "Please verify your email"
+Login: account disabled            YES       "Account suspended"
+Password reset: email not found    NO        "If account exists, email sent"
+Password reset: token expired      YES       "Link expired - request a new one"
+Password reset: token used         YES       "Link already used - request a new one"
+
+*Revealing these states leaks account existence. Accepted UX tradeoff -
+ document the decision. Some high-security apps keep all failures identical.
+```
+
+---
+
+## R. RLS drift: existing policies bypassed by new query paths
+
+RLS being enabled on a table is not enough if a new code path writes to
+that table without going through the session-binding RPC that sets the user
+context. This is called RLS drift: the policy exists and is correct, but a
+new mutation quietly bypasses it.
+
+It happens constantly with AI-assisted development. The agent writes a new
+API route, uses the Supabase client directly, and the UPDATE or DELETE runs
+with the service role or an unauthenticated client that skips row filtering
+entirely.
+
+**Check every new mutation (INSERT, UPDATE, DELETE) against this list:**
+
+- Does the route go through the session-binding RPC before touching the table?
+  If the app uses a pattern like `set_current_user(uid)` before queries, every
+  new route must call it.
+- Does the query include an explicit `user_id = current_user.id` WHERE clause,
+  or does it rely purely on RLS? If it relies on RLS, confirm the session
+  context is set before the query runs - not just before the SELECT.
+- Is the Supabase client used in the route the anon/user client (respects RLS)
+  or the service role client (bypasses RLS entirely)? A mutation using the
+  service role client has no RLS protection regardless of the policy.
+- Does the API route validate ownership before mutating? An RLS policy on
+  SELECT does not automatically protect UPDATE. Check that an UPDATE policy
+  with a WITH CHECK clause also exists.
+
+**The drift pattern to watch for:**
+
+```typescript
+// DRIFTED - new route added, service role client used, RLS bypassed silently
+export async function POST(req: Request) {
+  const { id, status } = await req.json();
+  const user = await getUser(req); // auth check present
+  // but supabaseAdmin bypasses all RLS - any user can update any row
+  await supabaseAdmin.from('applications').update({ status }).eq('id', id);
+}
+
+// CORRECT - uses user-scoped client after binding session
+export async function POST(req: Request) {
+  const user = await getUser(req);
+  const supabase = createClient({ userId: user.id }); // RLS context set
+  await supabase.from('applications')
+    .update({ status })
+    .eq('id', id)
+    .eq('user_id', user.id); // explicit ownership filter as backstop
+}
+```
+
+**Schema drift:** When a new table is added via migration but no RLS policy
+is written for it, all existing app code that references it runs without row
+security. Every migration file that contains a CREATE TABLE must also contain
+ENABLE ROW LEVEL SECURITY and at least one policy for that table in the same
+file or a paired migration. Never leave RLS as a follow-up task.
+
+---
+
+## S. Unsafe execution paths: command execution from SQL and application code
+
+PostgreSQL has several features that execute OS commands or read the file
+system. These are legitimate for DBAs but are serious vulnerabilities if
+reachable from application code or untrusted input.
+
+### S1. COPY TO/FROM PROGRAM
+
+`COPY (SELECT ...) TO PROGRAM 'cmd'` executes an arbitrary OS command as
+the PostgreSQL OS user. `COPY ... FROM PROGRAM 'cmd'` reads stdout from a
+command into a table. If any part of the command string comes from user input
+or a database column, this is a command injection vulnerability with full OS
+access.
+
+```sql
+-- DANGEROUS: command string built from user-controlled data
+COPY (SELECT data FROM uploads WHERE id = $1)
+  TO PROGRAM 'gzip > /tmp/' || user_supplied_filename;
+
+-- Also dangerous in a PL/pgSQL function
+EXECUTE 'COPY ... TO PROGRAM ''' || cmd_string || '''';
+```
+
+Block access entirely: revoke the `pg_execute_server_program` role from the
+application role. Application code should never need COPY TO PROGRAM.
+
+### S2. pg_read_file, pg_write_file, pg_ls_dir
+
+These superuser functions read and write arbitrary files on the PostgreSQL
+server's file system. They are intended for DBA diagnostics. If they are
+callable from an application role or from a SECURITY DEFINER function that
+an application role can invoke, they are a read/write primitive on the
+server OS.
+
+```sql
+-- Readable from application code? This is a full server file system reader
+SELECT pg_read_file('/etc/passwd');
+SELECT pg_read_file(user_supplied_path); -- directory traversal
+```
+
+Mitigation: never grant `pg_monitor` or `pg_read_server_files` to the
+application role. Audit SECURITY DEFINER functions for calls to these.
+
+### S3. lo_import, lo_export (large object file I/O)
+
+`lo_import('/path/to/file')` reads a file from the server's file system into
+a large object. `lo_export(oid, '/path/to/file')` writes a large object to
+the server's file system. These require superuser privileges but are
+sometimes granted to application roles via SECURITY DEFINER wrappers.
+
+```sql
+-- Writing attacker-controlled content to server file system
+SELECT lo_export(lo_from_bytea(0, decode($1, 'hex')), '/var/spool/cron/postgres');
+```
+
+The pgAdmin 4 CVE-2026-12044 exploit chain used exactly this pattern: an
+AI assistant prompt injection led to `COPY TO PROGRAM` execution through a
+SECURITY DEFINER wrapper. Audit every SECURITY DEFINER function that touches
+lo_import, lo_export, or COPY.
+
+### S4. exec/spawn/execSync in server-side application code
+
+When server-side code calls `child_process.exec()`, `spawn()`, or
+`execSync()` with any value derived from a database query, user input, or
+a file path - this is OS command injection at the application layer.
+
+```javascript
+// DANGEROUS: filename from DB used in shell command
+const { filename } = await db.query('SELECT filename FROM uploads WHERE id=$1', [id]);
+exec(`convert ${filename} output.png`); // shell injection if filename = "; rm -rf /"
+
+// SAFE: use execFile with an argument array, never exec with a template string
+execFile('convert', [filename, 'output.png']); // no shell interpretation
+```
+
+Rule: never use `exec()` or `execSync()` in server code. Use `execFile()` or
+`spawn()` with an explicit argument array. Never build a shell command string
+from any external value.

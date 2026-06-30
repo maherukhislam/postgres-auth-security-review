@@ -6,9 +6,9 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [1.1.0] - 2026-06-19
+## [1.1.0]: 2026-06-19
 
-### Added - new CVE coverage
+### Added: new CVE coverage
 - **CVE-2025-1094 (CVSS 8.1)** - psql SQL injection via invalid UTF-8 in
   `PQescapeLiteral()`/`PQescapeIdentifier()`. Exploited in the US Treasury
   BeyondTrust breach chain. Scan pattern added for libpq escape function use.
@@ -34,7 +34,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
   GitHub Secret Scanning auto-revocation, RLS on by default for dashboard
   tables).
 
-### Added - new scan checks (scripts/scan_auth_security.sh)
+### Added: new scan checks (scripts/scan_auth_security.sh)
 - Outdated Postgres Docker image (below safe minimums for mid-2026)
 - `WITH CHECK (true)` permissive write policy
 - bcrypt cost factor below 12
@@ -48,7 +48,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - `SameSite=None` without `Secure`
 - Unpinned Postgres/pgjdbc in dependency files
 
-### Added - new SKILL.md sections
+### Added: new SKILL.md sections
 - Section A: PostgreSQL version and patch status (with version table)
 - Session fixation rule
 - OAuth 2.0 requirements (PKCE, state parameter)
@@ -61,7 +61,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [1.0.0] - 2026-06-19
+## [1.0.0]: 2026-06-19
 
 ### Added
 - `SKILL.md` with core Postgres/Supabase and auth security rules
@@ -71,7 +71,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - `scripts/scan_auth_security.sh` - 7-pattern static scanner
 - `.github/workflows/validate.yml` - CI validation of SKILL.md frontmatter
 
-## [1.2.0] - 2026-06-21
+## [1.2.0]: 2026-06-21
 
 ### Context
 This release was informed by auditing a real Jamstack production stack:
@@ -82,7 +82,7 @@ for sensitive document storage, DB-backed rate limiting, and minor/guardian
 consent flows. The new rules are written generically so they apply to any
 stack with these architectural patterns.
 
-### Added - new SKILL.md sections
+### Added: new SKILL.md sections
 - **Section C: Custom RLS session-binding functions** - fail-open on RPC error,
   `is_admin()` failing open, SET vs SET LOCAL leak in connection pools,
   materialized views bypassing RLS.
@@ -105,7 +105,7 @@ stack with these architectural patterns.
   date-of-birth update re-verification.
 - Final scan gate expanded from 10 to 20 items.
 
-### Added - new scan patterns (scripts/scan_auth_security.sh)
+### Added: new scan patterns (scripts/scan_auth_security.sh)
 - `B4` - `CREATE MATERIALIZED VIEW` advisory (RLS does not apply at query time)
 - `F1` - `crypto.subtle` usage without visible `alg:none` rejection
 - `F2` - JWT payload parsed before `crypto.subtle.verify()` (authentication bypass)
@@ -126,7 +126,7 @@ stack with these architectural patterns.
 - `P2` - Reset token query without `used=false` check
 - Scanner version bumped to `v1.2.0`; `.wrangler` added to exclude dirs
 
-### Added - references/checklist.md
+### Added: references/checklist.md
 - Section 3: Custom RLS session binding - full code examples for all four
   failure modes (fail-open policy, is_admin() fail-open, SET vs SET LOCAL,
   RPC error not caught)
@@ -148,9 +148,9 @@ stack with these architectural patterns.
 - `metadata.version` bumped to `1.2.0`
 - Description updated to include new trigger categories
 
-## [1.3.0] - 2026-06-23
+## [1.3.0]: 2026-06-23
 
-### Added - Section P: Engineering Trade-offs (security without killing performance)
+### Added: Section P: Engineering Trade-offs (security without killing performance)
 
 The core insight: security slowdowns are almost always symptoms of a wrong
 implementation, not an inherent cost of the control. This section gives
@@ -223,3 +223,125 @@ control because it seems slow - find the actual bottleneck first.
 - Architecting on Cloudflare (Ch. 11, 14): Storage trade-offs - architectingoncloudflare.com
 - Cloudflare Durable Objects docs: rules, limits, what they are
 - Cloudflare Workers storage options docs - developers.cloudflare.com
+
+## [1.4.0]: 2026-06-25
+
+### Research basis
+The May 14, 2026 PostgreSQL security release (18.4 / 17.10 / 16.14 / 15.18 /
+14.23) fixed 11 CVEs - the largest single-release security batch in
+PostgreSQL's history. Three are CVSS 8.8 with practical exploit paths.
+pgAdmin 4 v9.16 (released ~June 23, 2026) fixed 7 more CVEs including a
+critical stored XSS via PostgreSQL error messages. All of these are new since
+v1.3.0.
+
+### Added: new CVEs (May 2026 batch)
+- **CVE-2026-6473 (CVSS 8.8)** - Integer wraparound in server memory-
+  allocation calculations, out-of-bounds write, backend crash/compromise.
+  Also affects intarray and ltree extension parsing.
+- **CVE-2026-6475 (CVSS 8.8)** - Path traversal in pg_basebackup and
+  pg_rewind via symlink following; OS account hijack on the backup client.
+- **CVE-2026-6477 (CVSS 8.8)** - PQfn() buffer overflow in libpq; malicious
+  server can overwrite client stack memory via lo_read()/pg_dump.
+- **CVE-2026-6472 (CVSS 5.4)** - CREATE TYPE missing schema CREATE privilege
+  check; another search_path hijack class (same as CVE-2018-1058).
+- **CVE-2026-6478 (CVSS 6.5)** - MD5 password comparison timing side-channel;
+  credentials recoverable via repeated connection timing. SCRAM-SHA-256 immune.
+  Affects clusters with legacy MD5 hashes from pre-PG14 upgrades.
+- **CVE-2026-6479 (CVSS 7.5)** - SSL/GSS startup recursion DoS; unauthenticated
+  crash of any backend reachable from untrusted clients.
+- **CVE-2026-6638 (CVSS 3.7)** - SQL injection in ALTER SUBSCRIPTION …
+  REFRESH PUBLICATION via unquoted table names; fires on publisher.
+- **CVE-2026-6637** - contrib/spi (refint) stack overflow + SQL injection;
+  unprivileged DB user executes arbitrary code. Drop refint immediately.
+- **PostgreSQL 14 EOL November 12, 2026** - migrate to 16 or 17. 14.23
+  is the final release. Added to SKILL.md version table.
+
+### Added: new scan patterns (scripts/scan_auth_security.sh)
+- `Q1` - pg_hba.conf `md5` auth method detection (CVE-2026-6478)
+- `Q2` - contrib/refint extension loaded (CVE-2026-6637)
+- `Q3` - ALTER SUBSCRIPTION REFRESH PUBLICATION advisory (CVE-2026-6638)
+- `Q4` - PQfn() usage in C code (CVE-2026-6477 deprecation)
+- `Q5` - Persistent advisory reminder to run MD5 audit on pg_authid
+- Scanner version bumped to v1.4.0; old Q renamed to R
+
+### Added: references/checklist.md
+- Updated version table with EOL column (PG14: Nov 2026)
+- Full section on May 2026 11-CVE batch with per-CVE descriptions
+- MD5 audit query: `SELECT rolname FROM pg_authid WHERE rolpassword LIKE 'md5%'`
+- pg_hba.conf migration guidance (md5 → scram-sha-256)
+- pgAdmin v9.16 CVEs noted in sources
+- Updated sources list
+
+
+### Added (login/signup edge cases)
+- **Section Q in SKILL.md: Login and signup flow edge cases** covering:
+  - Q1: Signup with existing email (identical response + background notification email)
+  - Q2: Login timing attack fix (dummy hash comparison when email not found)
+  - Q3: Account state decision table (unverified, locked, disabled, pending, MFA)
+  - Q4: Password reset edge cases (non-existent email, multiple requests, TOCTOU,
+    locked accounts, unverified accounts, token expiry messaging)
+  - Q5: Re-registration after soft vs hard account deletion
+  - Q6: Concurrent session policies (unlimited, single, capped) with implementation notes
+  - Q7: Complete response decision matrix table
+- **Section 15 in references/checklist.md** with full code examples for:
+  - Dummy hash timing defense (Argon2id and bcrypt versions)
+  - Signup notification email pattern
+  - Full account state decision tree with SQL
+  - Multiple password reset token management (atomic invalidate + insert)
+  - Session policy implementations (unlimited, single-session with version counter)
+  - 15-item login/signup checklist
+- **New scan patterns S1-S6:**
+  - S1: Account enumeration via specific "not found" error messages
+  - S2: Password reset revealing whether email is registered
+  - S3: Login early-return without dummy hash (timing side-channel)
+  - S4: Password change without visible token invalidation (TOCTOU)
+  - S5: Rate limiting keyed only on IP (not on email/username)
+  - S6: Session saved without regeneration (session fixation)
+
+### Fixed
+- Removed all em dashes (226 total) across all files; replaced with
+  hyphens, colons, or reworded sentences
+- Removed all en dashes in numeric ranges; replaced with hyphens
+
+### Changed
+- `metadata.version` bumped to `1.4.0`
+
+## [1.5.0] — 2026-06-30
+
+### Added — RLS drift and unsafe execution paths (Sections R and S)
+
+Derived from analyzing real-world AI-assisted coding failure patterns,
+specifically the class of issues where security controls exist but new code
+paths bypass them silently.
+
+**Section R: RLS drift**
+- Definition and explanation of the drift pattern (RLS enabled but new
+  mutations bypass it via service-role client or missing session binding)
+- The two-client pattern (supabase vs supabaseAdmin) and when each is correct
+- SQL detection queries to find tables with RLS but missing UPDATE or INSERT
+  policies
+- Code review checklist for every new mutation endpoint
+
+**Section S: Unsafe execution paths**
+- S1: COPY TO/FROM PROGRAM - OS command execution from PostgreSQL. Includes
+  the pgAdmin 4 CVE-2026-12044 prompt injection chain as a real-world example
+- S2: pg_read_file / pg_write_file / pg_ls_dir - server file system access
+  from SQL with audit queries
+- S3: lo_import / lo_export / lo_from_bytea - file I/O via large objects,
+  often wrapped in SECURITY DEFINER functions
+- S4: exec() / execSync() vs execFile() / spawn() - shell injection at the
+  application layer, with safe and unsafe code examples
+
+**New scan patterns T1-T6:**
+- T1: supabaseAdmin / service-role client used in a user-facing mutation
+- T2: .update() / .delete() without visible user_id / tenant_id ownership filter
+- T3: COPY TO PROGRAM / COPY FROM PROGRAM in SQL or application code
+- T4: pg_read_file / pg_write_file / pg_ls_dir usage
+- T5: lo_import / lo_export / lo_from_bytea in SQL
+- T6: exec() / execSync() in server-side code
+
+**References/checklist.md additions:**
+- Section 16: RLS drift full reference (detection queries, two-client pattern,
+  mutation endpoint checklist)
+- Section 17: Unsafe execution paths (COPY TO PROGRAM audit SQL, lo_import
+  exploit chain, exec vs execFile comparison, 7-item combined checklist)
